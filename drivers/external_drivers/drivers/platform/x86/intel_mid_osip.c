@@ -661,6 +661,17 @@ static int osip_init(void)
 	if (reboot_target_register(&osip_reboot_target))
 		pr_warning("osip: unable to register reboot notifier");
 
+	/*
+	 * Diagnostic boot option: arm recovery as the next boot target before
+	 * userspace starts.  An orderly reboot still runs the normal reboot
+	 * notifier and replaces this target.  A panic/hard-lockup reboot does
+	 * not, so firmware falls back to recovery instead of fastboot.
+	 */
+	if (strstr(saved_command_line, "panic_recovery=1")) {
+		pr_warn("osip: panic_recovery=1, arming recovery target\n");
+		osip_reboot_target_call("recovery", SIGNED_RECOVERY_ATTR);
+	}
+
 #endif
 	create_debugfs_files();
 	return 0;
