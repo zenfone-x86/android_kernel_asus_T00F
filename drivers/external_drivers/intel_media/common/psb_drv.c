@@ -3563,17 +3563,9 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 					    (intel_vblank_count(dev, pipe) !=
 					     vbl_count),
 					    3 * DRM_HZ);
-#ifndef CONFIG_A500CG
 				if (!ret)
 					DRM_ERROR("Pipe %d vsync time out\n",
 							pipe);
-#else
-				if (!ret) {
-					DRM_ERROR("Pipe %d vsync time out\n",
-							pipe);
-					mdfld_reset_dpi_panel(dev_priv);
-				}
-#endif
 			}
 
 			getrawmonotonic(&now);

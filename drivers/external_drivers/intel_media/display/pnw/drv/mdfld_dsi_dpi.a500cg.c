@@ -40,7 +40,15 @@ extern int entry_mode;
 
 
 #define BKL_EN_WKAD 1
-#define PANEL_RESET_WKAD 1
+
+/*
+ * The one-shot panel reset used by the legacy Android display stack runs
+ * from inside the first panel power-off operation.  On newer userspace the
+ * screen can be woken while that reset is still cycling the display island,
+ * leaving DSI in a broken state and eventually hard-resetting the system.
+ * Keep the normal DPMS and ESD recovery paths, but disable this boot-time
+ * workaround.
+ */
 
 #ifdef PANEL_RESET_WKAD
 static int reset_panel = 1;
