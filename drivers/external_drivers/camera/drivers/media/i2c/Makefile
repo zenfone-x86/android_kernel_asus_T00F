@@ -33,6 +33,7 @@ obj-$(CONFIG_VIDEO_OV2722)     += ov2722.o
 obj-$(CONFIG_VIDEO_OV8830)     += ov8830.o
 
 obj-$(CONFIG_VIDEO_HM2056)     += hm2056.o
+CFLAGS_hm2056.o += -Wno-error
 obj-$(CONFIG_VIDEO_GC2155)     += gc2155.o
 
 obj-$(CONFIG_VIDEO_S5K8AAY)    += s5k8aay.o

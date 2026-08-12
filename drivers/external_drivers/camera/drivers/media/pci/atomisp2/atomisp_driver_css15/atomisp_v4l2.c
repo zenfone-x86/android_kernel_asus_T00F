@@ -1097,6 +1097,7 @@ static int atomisp_register_entities(struct atomisp_device *isp)
 {
 	int ret = 0;
 	unsigned int i;
+	struct atomisp_input_subdev input;
 
 	isp->media_dev.dev = isp->dev;
 
@@ -1216,6 +1217,25 @@ static int atomisp_register_entities(struct atomisp_device *isp)
 	isp->inputs[isp->input_cnt].camera_caps =
 		    atomisp_get_default_camera_caps();
 	isp->inputs[isp->input_cnt++].camera = &isp->file_dev.sd;
+
+	/*
+	 * The legacy T00F configuration can expose the HM2056 front sensor as
+	 * its only physical input, mapped by Android to camera ID 1.  The generic
+	 * AtomISP setup appends its synthetic file input
+	 * after physical sensors, which would otherwise occupy slot 1.  The
+	 * proprietary HAL enumerates this table before S_INPUT, so redirecting
+	 * S_INPUT later is insufficient: it sees "file_input_subdev" and cannot
+	 * load the HM2056 sensor configuration.  Keep the HAL-visible numbering
+	 * consistent by placing HM2056 in input slot 1 at registration time.
+	 */
+	if (isp->input_cnt == 2 &&
+	    isp->inputs[0].camera &&
+	    isp->inputs[1].type == FILE_INPUT &&
+	    !strncmp(isp->inputs[0].camera->name, "hm2056", strlen("hm2056"))) {
+		input = isp->inputs[0];
+		isp->inputs[0] = isp->inputs[1];
+		isp->inputs[1] = input;
+	}
 
 	if (isp->input_cnt < ATOM_ISP_MAX_INPUTS) {
 		dev_dbg(isp->dev,
