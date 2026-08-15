@@ -612,6 +612,14 @@ static inline int bcu_action_voltage_drop(void)
 	psy = get_psy_battery();
 	if (!psy)
 		return -EINVAL;
+	/*
+	 * Not every battery driver supports changing CAPACITY.  In particular,
+	 * the ASUS battery power supply is read-only and leaves set_property
+	 * unset.  Calling it unconditionally turns a BCU voltage warning into
+	 * a NULL function-pointer kernel panic.
+	 */
+	if (!psy->set_property)
+		return -EOPNOTSUPP;
 
 	/* setting battery capacity to 0 */
 	val.intval = 0;
