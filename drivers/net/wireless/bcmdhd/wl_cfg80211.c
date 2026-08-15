@@ -534,11 +534,12 @@ static chanspec_t wl_cfg80211_get_shared_freq(struct wiphy *wiphy);
 s32 wl_cfg80211_channel_to_freq(u32 channel);
 
 #if defined(DHCP_SCAN_SUPPRESS)
-static void wl_cfg80211_work_handler(struct work_struct *work);
+static void wl_cfg80211_scan_supp_work_handler(struct work_struct *work);
 static void wl_cfg80211_scan_supp_timerfunc(ulong data);
 #endif /* DHCP_SCAN_SUPPRESS */
 
 static void wl_cfg80211_work_handler(struct work_struct *work);
+static void wl_cancel_pm_enable_work(struct wl_priv *wl);
 static s32 wl_add_keyext(struct wiphy *wiphy, struct net_device *dev,
 	u8 key_idx, const u8 *mac_addr,
 	struct key_params *params);
@@ -7182,6 +7183,10 @@ static void wl_free_wdev(struct wl_priv *wl)
 {
 	struct wireless_dev *wdev = wl->wdev;
 	struct wiphy *wiphy;
+
+	/* pm_enable_work uses wl and must not outlive the wiphy private data. */
+	wl_cancel_pm_enable_work(wl);
+
 	if (!wdev) {
 		WL_ERR(("wdev is invalid\n"));
 		return;
@@ -9925,6 +9930,8 @@ s32 wl_cfg80211_attach(struct net_device *ndev, void *data)
 	wl->wdev = wdev;
 	wl->pub = data;
 	INIT_LIST_HEAD(&wl->net_list);
+	/* Initialize before any path that can release wl through wl_free_wdev(). */
+	INIT_DELAYED_WORK(&wl->pm_enable_work, wl_cfg80211_work_handler);
 	ndev->ieee80211_ptr = wdev;
 	SET_NETDEV_DEV(ndev, wiphy_dev(wdev->wiphy));
 	wdev->netdev = ndev;
@@ -9963,8 +9970,6 @@ s32 wl_cfg80211_attach(struct net_device *ndev, void *data)
 		goto cfg80211_attach_out;
 #endif 
 
-	INIT_DELAYED_WORK(&wl->pm_enable_work, wl_cfg80211_work_handler);
-
 	wlcfg_drv_priv = wl;
 
 #if defined(WL_ENABLE_P2P_IF)
@@ -9989,6 +9994,7 @@ void wl_cfg80211_detach(void *para)
 	wl = wlcfg_drv_priv;
 
 	WL_TRACE(("In\n"));
+	wl_cancel_pm_enable_work(wl);
 
 #if defined(COEX_DHCP)
 	wl_cfg80211_btcoex_deinit(wl);
@@ -10667,7 +10673,7 @@ static s32 __wl_cfg80211_up(struct wl_priv *wl)
 	init_timer(&wl->scan_supp_timer);
 	wl->scan_supp_timer.data = (ulong)wl;
 	wl->scan_supp_timer.function = wl_cfg80211_scan_supp_timerfunc;
-	INIT_WORK(&wl->wlan_work, wl_cfg80211_work_handler);
+	INIT_WORK(&wl->wlan_work, wl_cfg80211_scan_supp_work_handler);
 #endif /* DHCP_SCAN_SUPPRESS */
 	wl_set_drv_status(wl, READY, ndev);
 	return err;
@@ -12813,6 +12819,18 @@ static void wl_cfg80211_scan_supp_timerfunc(ulong data)
 	schedule_work(&wl->wlan_work);
 }
 
+static void wl_cfg80211_scan_supp_work_handler(struct work_struct *work)
+{
+	struct wl_priv *wl = container_of(work, struct wl_priv, wlan_work);
+
+	if (!wl->scan_suppressed)
+		return;
+
+	/* Clean up scan suppression after its timeout. */
+	WL_ERR(("Clean up from timer after %d msec\n", WL_SCAN_SUPPRESS_TIMEOUT));
+	wl_cfg80211_scan_suppress(wl_to_prmry_ndev(wl), 0);
+}
+
 int wl_cfg80211_scan_suppress(struct net_device *dev, int suppress)
 {
 	int ret = 0;
@@ -12894,13 +12912,12 @@ static void wl_cfg80211_work_handler(struct work_struct * work)
 		}
 
 	}
-#if defined(DHCP_SCAN_SUPPRESS)
-	else if (wl->scan_suppressed) {
-		/* There is pending scan_suppress. Clean it */
-		WL_ERR(("Clean up from timer after %d msec\n", WL_SCAN_SUPPRESS_TIMEOUT));
-		wl_cfg80211_scan_suppress(wl_to_prmry_ndev(wl), 0);
-	}
-#endif /* DHCP_SCAN_SUPPRESS */
+}
+
+static void wl_cancel_pm_enable_work(struct wl_priv *wl)
+{
+	cancel_delayed_work_sync(&wl->pm_enable_work);
+	wl->pm_enable_work_on = false;
 }
 
 u8
