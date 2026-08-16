@@ -959,6 +959,8 @@ int set_enable_s0ix(const char *val, struct kernel_param *kp)
 	if (unlikely((!pmu_initialized)))
 		return 0;
 
+	/* C-state restriction state is provided only with PM debug support. */
+#ifdef CONFIG_PM_DEBUG
 	if (platform_is(INTEL_ATOM_MRFLD) || platform_is(INTEL_ATOM_MOORFLD)) {
 		if (!enable_s0ix) {
 			mid_pmu_cxt->cstate_ignore =
@@ -991,6 +993,7 @@ int set_enable_s0ix(const char *val, struct kernel_param *kp)
 							PM_QOS_DEFAULT_VALUE);
 		}
 	}
+#endif
 
 	return 0;
 }
