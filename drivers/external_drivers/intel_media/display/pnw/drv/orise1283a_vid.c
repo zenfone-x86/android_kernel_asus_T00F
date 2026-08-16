@@ -2987,10 +2987,8 @@ static int orise1283a_vid_set_brightness(struct mdfld_dsi_config *dsi_config,
 		return -EINVAL;
 	}
 #if PWM_SOC_ENABLE
-	if (board_proj_id == PROJ_ID_A600CG || board_proj_id == PROJ_ID_A601CG)
-		pwm_min = 5;
-	else
-		pwm_min = 13;
+	/* Keep the panel's low-end range available to the Android brightness UI. */
+	pwm_min = 5;
 	pwm_max = 255;
 
 	if (level <= 0) {
