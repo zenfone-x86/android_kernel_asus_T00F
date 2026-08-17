@@ -192,6 +192,16 @@ static void late_resume(struct work_struct *work)
 		pr_info("late_resume: done\n");
 abort:
 	mutex_unlock(&early_suspend_lock);
+
+	/*
+	 * A wakeup source is needed while late-resume handlers run, but it
+	 * must not remain active while the display is on.  If another suspend
+	 * request raced with us, early_suspend() owns the release instead.
+	 */
+	spin_lock_irqsave(&state_lock, irqflags);
+	if (state == 0)
+		__pm_relax(early_suspend_ws);
+	spin_unlock_irqrestore(&state_lock, irqflags);
 }
 
 void request_suspend_state(suspend_state_t new_state)
@@ -219,6 +229,8 @@ void request_suspend_state(suspend_state_t new_state)
 	}
 	if (!old_sleep && new_state != PM_SUSPEND_ON) {
 		state |= SUSPEND_REQUESTED;
+		/* Keep suspend blocked until early-suspend handlers have finished. */
+		__pm_stay_awake(early_suspend_ws);
 		queue_up_early_suspend_work(&early_suspend_work);
 	} else if (old_sleep && new_state == PM_SUSPEND_ON) {
 		state &= ~SUSPEND_REQUESTED;
