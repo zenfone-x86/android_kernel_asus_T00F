@@ -169,7 +169,8 @@ static int AKECS_Set_CNTL(
 	mutex_lock(&akm->sensor_mutex);
 	/* Busy check */
 	if (akm->is_busy > 0) {
-		dev_err(&akm->i2c->dev,
+		/* A userspace retry loop must not flood the kernel log. */
+		dev_err_ratelimited(&akm->i2c->dev,
 				"%s: device is busy.\n", __func__);
 		err = -EBUSY;
 	} else {
@@ -1364,6 +1365,12 @@ static irqreturn_t akm_compass_irq(int irq, void *handle)
 	return IRQ_HANDLED;
 
 work_func_none:
+	/*
+	 * A spurious IRQ with DRDY clear cannot complete the outstanding
+	 * measurement.  Do not leave the device permanently busy: subsequent
+	 * SET_MODE requests would otherwise spin in userspace and flood dmesg.
+	 */
+	s_akm->is_busy = 0;
 	mutex_unlock(&s_akm->sensor_mutex);
 	/***** unlock *****/
 
